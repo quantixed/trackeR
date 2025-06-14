@@ -33,7 +33,7 @@ generate_variable_names <- function() {
                    "distance",
                    "hr",
                    "speed",
-                   "rcad", ## dummy for now; gpx seems not to distinguish between run and cycling cadence
+                   "cadence", ## changed from rcad; gpx seems not to distinguish between run and cycling cadence
                    "cad",
                    "power",
                    "atemp")

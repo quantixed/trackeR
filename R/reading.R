@@ -219,8 +219,15 @@ readGPX <- function(file,
     extensions_ns <- c("http://www.garmin.com/xmlschemas/TrackPointExtension/v1",
                        "http://www.garmin.com/xmlschemas/TrackPointExtension/v2",
                        "http://www.topografix.com/GPX/1/1",
-                       "http://www.garmin.com/xmlschemas/GpxExtensions/v3")
-    extensions_ns <- na.omit(sapply(extensions_ns, function(e) names(which(ns == e)[1])))
+                       "http://www.garmin.com/xmlschemas/GpxExtensions/v3",
+                       "http://www.cluetrust.com/XML/GPXDATA/1/0",
+                       "http://www.w3.org/2001/XMLSchema-instance")
+    extensions_ns <- as.character(sapply(extensions_ns, function(e) {
+      l <- length(which(ns == e))
+      names(which(ns == e)[l])
+    }, USE.NAMES = FALSE))
+    # remove character(0) from vector
+    extensions_ns <- extensions_ns[extensions_ns != "character(0)"]
 
     ## Guess sport from data
     sport <- guess_sport(xml_text(xml_find_first(doc, paste0("//", activity_ns, ":", "name"))))
@@ -243,21 +250,28 @@ readGPX <- function(file,
 
     is_extensions <- tp_vars$name == "extensions"
     if (any(is_extensions)) {
-        ## remove position
-        tp_vars <- tp_vars[!is_extensions, ]
-        for (e in extensions_ns) {
-            e_xpath <- paste0("//", e, ":", "TrackPointExtension")
-            ## Add any extensions
-            ch_nam <- children_names(doc, e_xpath, ns[e])
-            if (length(ch_nam)) {
-                children <- data.frame(name = ch_nam, ns = e)
-                tp_vars <- rbind(tp_vars, children)
-            }
+      ## remove position
+      tp_vars <- tp_vars[!is_extensions, ]
+      for (e in extensions_ns) {
+        # Find children under <TrackPointExtension>
+        e_xpath_tpe <- paste0("//", e, ":", "TrackPointExtension")
+        ch_nam_tpe <- children_names(doc, e_xpath_tpe, ns[e])
+        # Find children directly under <extensions>
+        e_xpath_ext <- paste0("//", activity_ns, ":extensions/", e, ":*")
+        ch_nam_ext <- unique(xml_name(xml_find_all(doc, e_xpath_ext, ns)))
+        # Combine both sets of children
+        ch_nam <- unique(c(ch_nam_tpe, ch_nam_ext))
+        if (length(ch_nam)) {
+          children <- data.frame(name = ch_nam, ns = e)
+          tp_vars <- rbind(tp_vars, children)
         }
+      }
     }
 
-    ## Manually add power to tp_vars as it does not come with the standard namespaces in gpx
-    tp_vars <- rbind(tp_vars, data.frame(name = "power", ns = "d1"))
+    ## Manually add power to tp_vars if it not present
+    if (!any(tp_vars$name == "power")) {
+      tp_vars <- rbind(tp_vars, data.frame(name = "power", ns = "d1"))
+    }
 
     is_time <- tp_vars$name == "time"
 
